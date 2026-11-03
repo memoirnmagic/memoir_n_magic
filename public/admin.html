@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Memoir &amp; Magic – Owner dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--rose:#D9A5B3;--lav:#C8B9E3;--cream:#FFF6E9;--sage:#A9BBA5;--ink:#4a3a48;--rd:#a8586f}
+*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font:16px/1.5 Nunito,system-ui,sans-serif}
+h1,h2,h3{font-family:'Cormorant Garamond',Georgia,serif;margin:0 0 .5em}a{color:var(--rd)}
+.wrap{max-width:1200px;margin:auto;padding:18px}.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.top h1{margin:0;flex:1}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}.tabs button,.btn{border:0;border-radius:99px;padding:9px 18px;font:700 .95rem Nunito;cursor:pointer;background:var(--rose);color:var(--ink)}
+.tabs button{background:#fff}.tabs button.on{background:var(--lav)}.btn.s{background:var(--sage)}.btn.d{background:#f3c5c5}.btn.g{background:#fff;border:2px solid var(--rose)}
+.card{background:#fffdf8;border-radius:20px;padding:20px;box-shadow:0 8px 24px rgba(120,90,110,.12);margin-bottom:18px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.stat{background:#fff;border-radius:16px;padding:14px;border-left:6px solid var(--lav)}.stat b{display:block;font:700 1.8rem 'Cormorant Garamond',serif}
+input,select,textarea{width:100%;padding:9px 12px;border:2px solid #e6d3da;border-radius:12px;font:inherit;background:#fff;color:var(--ink)}
+label{display:block;font-weight:700;font-size:.88rem;margin:10px 0 3px}.g2{display:grid;gap:0 14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:700px}th,td{padding:9px 10px;text-align:left;border-bottom:1px solid #eadbe0;font-size:.92rem}tr.o{cursor:pointer}tr.o:hover{background:#fbeff2}
+.pill{border-radius:99px;padding:2px 10px;font-size:.8rem;background:var(--lav);white-space:nowrap}.hide{display:none!important}.err{background:#fbe3e3;padding:8px 12px;border-radius:10px;margin:8px 0}
+dialog{border:0;border-radius:24px;max-width:860px;width:95vw;background:var(--cream);padding:22px}dialog::backdrop{background:rgba(74,58,72,.55)}
+.imgs img{height:110px;border-radius:10px;margin:4px;border:2px solid #fff}pre{white-space:pre-wrap;background:#fff;padding:10px;border-radius:10px;font-size:.82rem}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:99px;z-index:99}
+.sg{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}.sg img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:10px}
+</style></head><body><div class="wrap">
+<div id="login" class="card hide" style="max-width:380px;margin:80px auto"><h2>Memoir &amp; Magic</h2><p>Owner login</p><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password"><p><button class="btn" id="lb">Log in</button></p><div id="le"></div></div>
+<div id="app" class="hide">
+<div class="top"><h1>Owner dashboard</h1><a class="btn g" style="text-decoration:none" href="/">View site</a><button class="btn g" id="out">Log out</button></div>
+<div class="tabs" id="tabs"></div>
+<div id="t-over"></div><div id="t-orders" class="hide"></div><div id="t-samples" class="hide"></div><div id="t-pricing" class="hide"></div><div id="t-settings" class="hide"></div></div></div>
+<dialog id="dlg"></dialog>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const inr=n=>'₹'+Number(n||0).toLocaleString('en-IN'),toast=m=>{const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.append(t);setTimeout(()=>t.remove(),3000)};
+const api=async(u,o={})=>{const r=await fetch(u,o);if(r.status==401&&u!='/api/admin/login'){show(false);throw new Error('Please log in')}const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Something went wrong');return j};
+const J=(m,b)=>({method:m,headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+const STAT=['Order Received','Payment Verification','Story Development','Character Design','Illustration in Progress','Customer Approval','Printing','Quality Check','Dispatched','Delivered','Cancelled'];
+const PAY=['Awaiting payment','Submitted – awaiting verification','Verified (paid)','Rejected','Refunded'];
+const CATS=['Little Heroes','Sisters & Besties','Our Love Story'],SC=["Children's Stories",'Friendship Stories','Love Stories'];
+let cfg,tab='over';
+const show=v=>{$('#login').classList.toggle('hide',v);$('#app').classList.toggle('hide',!v)};
+$('#lb').onclick=async()=>{try{await api('/api/admin/login',J('POST',{password:$('#pw').value}));init()}catch(e){$('#le').innerHTML=`<div class="err">${esc(e.message)}</div>`}};
+$('#pw').onkeydown=e=>{if(e.key=='Enter')$('#lb').click()};
+$('#out').onclick=async()=>{await fetch('/api/admin/logout',{method:'POST'});show(false)};
+const TABS={over:'Overview',orders:'Orders',samples:'Sample books',pricing:'Pricing',settings:'Settings'};
+$('#tabs').innerHTML=Object.entries(TABS).map(([k,v])=>`<button data-t="${k}">${v}</button>`).join('');
+$('#tabs').onclick=e=>{const k=e.target.dataset.t;if(k)go(k)};
+function go(k){tab=k;document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t==k));Object.keys(TABS).forEach(t=>$('#t-'+t).classList.toggle('hide',t!=k));({over,orders,samples,pricing,settings})[k]()}
+async function init(){try{if(!(await api('/api/admin/me')).admin)return show(false);cfg=await fetch('/api/config').then(r=>r.json());show(true);go(tab)}catch{show(false)}}
+
+async function over(){const s=await api('/api/admin/stats'),S=[['Total orders',s.total],['New (unpaid)',s.fresh],['Pending payment checks',s.pendingPayments],['In progress',s.inProgress],['Completed',s.completed],['Dispatched',s.dispatched],['Total sales (verified)',inr(s.sales)],['This month',inr(s.monthSales)]];
+ $('#t-over').innerHTML=`<div class="stats">${S.map(x=>`<div class="stat">${x[0]}<b>${x[1]}</b></div>`).join('')}</div><p style="font-size:.85rem">Sales count only payments you have verified.</p><div class="card"><h3>Website messages</h3>${s.messages.length?s.messages.map(m=>`<p><b>${esc(m.name)}</b> (<a href="mailto:${esc(m.email)}">${esc(m.email)}</a>) · ${esc(m.created.slice(0,10))}<br>${esc(m.body)}</p>`).join(''):'<p>No messages yet.</p>'}</div>`}
+
+async function orders(){const el=$('#t-orders');if(!el.dataset.init){el.dataset.init=1;el.innerHTML=`<div class="card"><div class="g2"><div><label>Order ID / customer</label><input id="fq"></div><div><label>Category</label><select id="fc"><option value="">All</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select></div><div><label>Payment</label><select id="fp"><option value="">All</option>${PAY.map(c=>`<option>${c}</option>`).join('')}</select></div><div><label>Order status</label><select id="fs"><option value="">All</option>${STAT.map(c=>`<option>${c}</option>`).join('')}</select></div><div><label>From</label><input id="ff" type="date"></div><div><label>To</label><input id="ft" type="date"></div></div>
+ <p><button class="btn" id="fg">Filter</button> <a class="btn s" style="text-decoration:none;display:inline-block" href="/api/admin/export.xlsx">Export all to Excel</a></p></div><div class="card tw" id="olist"></div>`;$('#fg').onclick=orders;el.querySelectorAll('input,select').forEach(i=>i.onchange=orders)}
+ const q=new URLSearchParams({q:$('#fq').value,category:$('#fc').value,payment:$('#fp').value,status:$('#fs').value,from:$('#ff').value,to:$('#ft').value});[...q].forEach(([k,v])=>!v&&q.delete(k));
+ orders.list=await api('/api/admin/orders?'+q);$('#olist').innerHTML=orders.list.length?`<table><tr><th>Order</th><th>Date</th><th>Customer</th><th>Category</th><th>Total</th><th>Payment</th><th>Status</th></tr>${orders.list.map(o=>`<tr class="o" data-id="${o.id}"><td>${o.id}</td><td>${o.created.slice(0,10)}</td><td>${esc(o.data.name)}</td><td>${esc(o.data.category)}</td><td>${inr(o.pricing.total)}</td><td><span class="pill">${esc(o.payment_status)}</span></td><td><span class="pill">${esc(o.order_status)}</span></td></tr>`).join('')}</table>`:'<p>No orders match.</p>';
+ $('#olist').onclick=e=>{const r=e.target.closest('tr.o');if(r)detail(r.dataset.id)}}
+function detail(id){const o=orders.list.find(x=>x.id==id),d=o.data,p=o.pricing,F=n=>`/api/admin/file/${n}`,ph=String(d.phone).replace(/\D/g,''),wa=(ph.length==10?'91':'')+ph;
+ const opt=(a,v)=>a.map(x=>`<option ${x==v?'selected':''}>${x}</option>`).join('');
+ $('#dlg').innerHTML=`<h3>${o.id}</h3><p><b>${esc(d.name)}</b> · ${esc(d.email)} · ${esc(d.phone)}<br>${esc(d.category)} · ${d.characters} characters · ${d.pages} pages · ${esc(d.size)}${d.sizeNote?' ('+esc(d.sizeNote)+')':''} · ${esc(d.quality)} · ${esc(d.format)}${d.urgent?' · URGENT':''}</p>
+ <p><b>Characters:</b> ${d.characterList.map(c=>esc(c.name)+(c.age?' ('+esc(c.age)+')':'')).join(', ')}</p><p><b>Story:</b> ${esc(d.story)}</p>${d.special?`<p><b>Special instructions:</b> ${esc(d.special)}</p>`:''}
+ <p><b>Wants by:</b> ${esc(d.deliveryDate)}<br><b>Address:</b> ${esc([d.address,d.city,d.state,d.pin].filter(Boolean).join(', '))||'PDF only'}</p>
+ <p>Characters ${inr(p.characters)} · Printing ${inr(p.printing)} · Premium ${inr(p.premium)} · Urgent ${inr(p.urgent)} · Delivery ${p.deliveryToBeQuoted?'<b>to be quoted</b>':inr(p.delivery)} · Creative ${inr(p.creative)} = <b>${inr(p.total)}</b></p>
+ <p class="small">Consent recorded ${esc(d.consentAt)}</p>
+ <div class="imgs">${o.photos.map(n=>`<a href="${F(n)}" target="_blank"><img src="${F(n)}" alt="Reference photo"></a>`).join('')||'<i>No reference photos</i>'}</div>
+ <h3 style="margin-top:14px">Payment</h3><p>Txn ID: <b>${esc(o.txn_id||'–')}</b> ${o.screenshot?`<a href="${F(o.screenshot)}" target="_blank"><img src="${F(o.screenshot)}" alt="Payment screenshot" style="height:140px;border-radius:10px;vertical-align:middle"></a>`:'(no screenshot yet)'}</p>
+ <p><button class="btn s" data-q="pay" data-v="Verified (paid)">Verify payment</button> <button class="btn d" data-q="pay" data-v="Rejected">Reject payment</button> <button class="btn g" data-q="pay" data-v="Refunded">Mark refunded</button> <button class="btn d" data-q="cancel">Cancel order</button></p>
+ <div class="g2"><div><label>Payment status</label><select id="dp">${opt(PAY,o.payment_status)}</select></div><div><label>Order status</label><select id="ds">${opt(STAT,o.order_status)}</select></div>
+ <div><label>Estimated delivery</label><input id="de" type="date" value="${esc(o.est_delivery)}"></div><div><label>Courier tracking number</label><input id="dt" value="${esc(o.tracking_no)}"></div><div><label>Delivery charge (₹)</label><input id="dd" type="number" min="0" placeholder="${p.delivery}"></div></div>
+ <label>Internal notes (never shown to customer)</label><textarea id="dn" rows="3">${esc(o.notes)}</textarea>
+ <p><button class="btn" id="sv">Save changes</button> <a class="btn g" style="text-decoration:none" target="_blank" href="https://wa.me/${wa}?text=${encodeURIComponent('Hi '+d.name+', this is Memoir & Magic about order '+o.id+'.')}">WhatsApp</a> <a class="btn g" style="text-decoration:none" href="mailto:${esc(d.email)}?subject=${encodeURIComponent('Your Memoir & Magic order '+o.id)}">Email</a> <button class="btn g" onclick="$('#dlg').close()">Close</button></p>
+ <details><summary>Notification log</summary><pre>${esc(JSON.stringify(o.notify_log,null,1))}</pre></details>`;
+ const save=async x=>{try{await api('/api/admin/orders/'+o.id,J('PATCH',x));toast('Saved');$('#dlg').close();orders()}catch(e){toast(e.message)}};
+ $('#sv').onclick=()=>save({payment_status:$('#dp').value,order_status:$('#ds').value,est_delivery:$('#de').value,tracking_no:$('#dt').value,notes:$('#dn').value,delivery:$('#dd').value});
+ $('#dlg').onclick=e=>{const b=e.target.closest('[data-q]');if(!b)return;const v=b.dataset.v;if(b.dataset.q=='pay')save({payment_status:v,order_status:v=='Verified (paid)'?'Story Development':v=='Rejected'?'Payment Verification':$('#ds').value});else if(confirm('Cancel this order?'))save({order_status:'Cancelled'})};
+ $('#dlg').showModal()}
+
+async function samples(){const l=await api('/api/samples'),el=$('#t-samples');
+ el.innerHTML=`<div class="card"><h3>Add a sample book</h3>${sform()}</div><div class="sg">${l.map(s=>`<div class="card"><img src="${esc(s.cover)}" alt=""><b>${esc(s.title)}</b>${s.featured?' ★':''}<br><small>${esc(s.category)} · ${esc(s.date)} · ${s.pages.length} pages${s.pdf?' + PDF':''}</small><p><button class="btn g" data-e="${s.id}">Edit</button> <button class="btn d" data-x="${s.id}">Delete</button></p></div>`).join('')}</div>`;
+ el.onclick=async e=>{const x=e.target.dataset.x,ed=e.target.dataset.e;if(x&&confirm('Delete this sample book?')){await api('/api/admin/samples/'+x,{method:'DELETE'});samples()}
+  if(ed){const s=l.find(z=>z.id==ed);$('#dlg').innerHTML=`<h3>Edit sample</h3>${sform(s)}<p><button class="btn g" onclick="$('#dlg').close()">Cancel</button></p>`;bind($('#dlg'),samples);$('#dlg').showModal()}};bind(el,samples)}
+const sform=s=>`<form class="sf" data-id="${s?.id||''}"><div class="g2"><div><label>Title</label><input name="title" required value="${esc(s?.title)}"></div><div><label>Category</label><select name="category">${SC.map(c=>`<option ${s?.category==c?'selected':''}>${c}</option>`).join('')}</select></div><div><label>Date</label><input type="date" name="date" value="${esc(s?.date||new Date().toISOString().slice(0,10))}"></div></div>
+ <label>Short description</label><textarea name="description" rows="2">${esc(s?.description)}</textarea><div class="g2"><div><label>Cover image ${s?'(leave empty to keep)':''}</label><input type="file" name="cover" accept="image/*" ${s?'':'required'}></div><div><label>Sample page images (multiple)</label><input type="file" name="pages" accept="image/*" multiple></div><div><label>Complete sample PDF</label><input type="file" name="pdf" accept="application/pdf"></div></div>
+ <label><input type="checkbox" name="featured" value="1" style="width:auto" ${s?.featured?'checked':''}> Featured</label>${s?'<label><input type="checkbox" name="clearPages" value="1" style="width:auto"> Remove existing page images first</label>':''}<p><button class="btn">${s?'Save':'Upload sample'}</button></p></form>`;
+function bind(root,done){root.querySelectorAll('.sf').forEach(f=>f.onsubmit=async e=>{e.preventDefault();const id=f.dataset.id;try{await api('/api/admin/samples'+(id?'/'+id:''),{method:id?'PUT':'POST',body:new FormData(f)});toast('Saved');$('#dlg').open&&$('#dlg').close();done()}catch(x){toast(x.message)}})}
+
+function pricing(){const P=cfg.pricing,L=cfg.lead,F=(id,l,v)=>`<div><label>${l}</label><input id="${id}" type="number" min="0" value="${v}"></div>`;
+ $('#t-pricing').innerHTML=`<div class="card"><h3>Pricing rules (₹)</h3><div class="g2">${F('pc','Per character',P.character)}${F('pr','Creative & book preparation (per book)',P.creative)}${F('pm','Premium extra per page',P.premiumPerPage)}${F('pu','Urgent order (per order)',P.urgent)}${F('ph','Delivery within Hyderabad',P.hydDelivery)}${F('po','Delivery outside Hyderabad (0 = quote separately)',P.outsideDelivery)}${F('ls','Standard lead time (days)',L.standard)}${F('lu','Urgent lead time (days)',L.urgent)}</div>
+ <h3 style="margin-top:16px">Print price per page by size</h3><div class="g2">${Object.entries(P.printPerPage).map(([k,v])=>F('pp-'+k,k,v)).join('')}</div><p><button class="btn" id="ps">Save pricing</button></p><p class="small">Changes apply to new quotes immediately. Existing orders keep their saved price.</p></div>`;
+ $('#ps').onclick=async()=>{const n=id=>+$('#'+id).value,pp={};Object.keys(P.printPerPage).forEach(k=>pp[k]=n('pp-'+k));
+  await api('/api/admin/settings',J('PUT',{pricing:{character:n('pc'),creative:n('pr'),premiumPerPage:n('pm'),urgent:n('pu'),hydDelivery:n('ph'),outsideDelivery:n('po'),printPerPage:pp},leadDays:{standard:n('ls'),urgent:n('lu')}}));cfg=await fetch('/api/config').then(r=>r.json());toast('Pricing saved')}}
+
+function settings(){const p=cfg.payment,c=cfg.contact,U=(k,l,cur)=>`<div><label>${l}</label>${cur?`<img src="${esc(cur)}" alt="" style="height:70px;display:block;margin-bottom:4px">`:''}<input type="file" accept="image/*" data-up="${k}"></div>`;
+ $('#t-settings').innerHTML=`<div class="card"><h3>Payment details</h3><label>Bank account details</label><textarea id="sb" rows="4">${esc(p.bank)}</textarea><div class="g2"><div><label>UPI ID</label><input id="su" value="${esc(p.upi)}"></div>${U('qr','Payment QR code image',p.qr)}</div><label>Payment instructions</label><textarea id="si" rows="2">${esc(p.instructions)}</textarea></div>
+ <div class="card"><h3>Contact &amp; brand</h3><div class="g2"><div><label>WhatsApp Business number (with country code)</label><input id="sw" value="${esc(c.whatsapp)}" placeholder="91XXXXXXXXXX"></div><div><label>Instagram handle</label><input id="sh" value="${esc(c.instagram)}"></div><div><label>Instagram profile link</label><input id="sl" value="${esc(c.instagramUrl)}"></div><div><label>Working hours</label><input id="sk" value="${esc(c.hours)}"></div>${U('logo','Logo (PNG)',c.logo)}${U('igqr','Instagram QR code',c.igqr)}</div></div>
+ <p><button class="btn" id="ss">Save settings</button></p>`;
+ document.querySelectorAll('[data-up]').forEach(i=>i.onchange=async()=>{const f=new FormData();f.append('file',i.files[0]);try{await api('/api/admin/asset/'+i.dataset.up,{method:'POST',body:f});cfg=await fetch('/api/config').then(r=>r.json());toast('Uploaded');settings()}catch(e){toast(e.message)}});
+ $('#ss').onclick=async()=>{await api('/api/admin/settings',J('PUT',{payment:{bank:$('#sb').value,upi:$('#su').value,instructions:$('#si').value},contact:{whatsapp:$('#sw').value,instagram:$('#sh').value.replace(/^@/,''),instagramUrl:$('#sl').value,hours:$('#sk').value}}));cfg=await fetch('/api/config').then(r=>r.json());toast('Settings saved')}}
+init();
+</script></body></html>
